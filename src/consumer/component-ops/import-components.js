@@ -1,5 +1,6 @@
 /** @flow */
 import R from 'ramda';
+import * as RA from 'ramda-adjunct';
 import chalk from 'chalk';
 import { NothingToImport } from '../exceptions';
 import { BitId, BitIds } from '../../bit-id';
@@ -91,13 +92,15 @@ export default class ImportComponents {
     const compiler = await this.consumer.compiler;
     const tester = await this.consumer.tester;
 
-    if ((R.isNil(dependenciesFromBitJson) || R.isEmpty(dependenciesFromBitJson)) && R.isEmpty(componentsFromBitMap)) {
+    if (RA.isNilOrEmpty(dependenciesFromBitJson) && R.isEmpty(componentsFromBitMap)) {
       if (!this.options.withEnvironments) {
         return Promise.reject(new NothingToImport());
       } else if (!tester && !compiler) {
         return Promise.reject(new NothingToImport());
       }
     }
+    this._updateComponentVersiondFromBitJsonAccordingToBitMap(dependenciesFromBitJson);
+
     const allDependenciesIds = dependenciesFromBitJson.concat(componentsFromBitMap);
     await this._warnForModifiedOrNewComponents(allDependenciesIds);
     const beforeImportVersions = await this._getCurrentVersions(allDependenciesIds);
@@ -139,6 +142,16 @@ export default class ImportComponents {
     }
 
     return { dependencies: componentsAndDependencies, importDetails };
+  }
+
+  _updateComponentVersiondFromBitJsonAccordingToBitMap(dependenciesFromBitJson: BitId[]): void {
+    if (RA.isNilOrEmpty(dependenciesFromBitJson)) return;
+    dependenciesFromBitJson.forEach((bitId) => {
+      const existingInBitMap = this.consumer.bitMap.getExistingComponentId(bitId.toStringWithoutVersion());
+      if (!existingInBitMap) return;
+      const existingInBitMapParsed = BitId.parse(existingInBitMap);
+      if (existingInBitMapParsed.hasVersion()) bitId.version = existingInBitMapParsed.version;
+    });
   }
 
   async _getCurrentVersions(ids: BitId[]): ImportedVersions {

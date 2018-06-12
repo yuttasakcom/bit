@@ -35,6 +35,19 @@ describe('bit import command with no ids', function () {
         expect(output).to.have.string('successfully imported');
       });
     });
+    describe('when there is a local tag that is not in the remote', () => {
+      before(() => {
+        helper.importAllComponents(true);
+        const output = helper.commitComponent('bar/foo', undefined, '0.0.2');
+        expect(output).to.have.string('bar/foo@0.0.2'); // make sure it tagged to 0.0.2 version
+        helper.importAllComponents(true);
+      });
+      it('should not change the version back to the old one in bitmap', () => {
+        const bitMap = helper.readBitMap();
+        expect(bitMap).to.have.property(`${helper.remoteScope}/bar/foo@0.0.2`);
+        expect(bitMap).to.not.have.property(`${helper.remoteScope}/bar/foo@0.0.1`);
+      });
+    });
   });
   describe('with a component in bit.map', () => {
     before(() => {
