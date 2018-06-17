@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [unreleased]
 
+## [13.0.0-dev.12] - 2018-06-17
+
+- fix - handle bit diff for local components without specifying scope
+- fix - show component on bit list even when there is duplicate entries in bitmap file
+- fix - remove alias t from bit test command (conflicts with tag command)
+- fix - operation aborted error when aborting username/pass authentication
+- fix handle tsx files when detectiveOption is empty
+- change - do not override existing bit.json on bit init
+- backward compatibility for components with environments with latest version
+- fix unhandled rejection on bit test
+- show dependent component id when trying to install missing environment
+- change no-launch-browser to suppress-browser-launch in bit login flag
+
+## [13.0.0-dev.11] - 2018-06-13
+
 - fix 'component not found' error when importing a component with a specific version while having a local tag
 - prevent overriding local tags from remote components upon import
 - fix bit import -e flag
@@ -14,6 +29,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 - throw an error when auto tag components has a newer version
 - fix output when running bit diff after tagging component
 - fix - after auto-tagging a component with a pending update - it became modified
+- added missing programmatic flags for bit isolate cmd
+- fix - running bit log on local components with scope
 
 ## [13.0.0-dev.10] - 2018-06-08
 
