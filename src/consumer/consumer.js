@@ -19,7 +19,7 @@ import {
   BIT_HIDDEN_DIR,
   COMPONENT_ORIGINS,
   BIT_VERSION,
-  NODE_PATH_SEPARATOR,
+  NODE_PATH_COMPONENT_SEPARATOR,
   LATEST_BIT_VERSION,
   BIT_GIT_DIR,
   DOT_GIT_DIR
@@ -204,8 +204,11 @@ export default class Consumer {
     };
   }
 
-  async write(): Promise<Consumer> {
-    await Promise.all([this.bitJson.write({ bitDir: this.projectPath }), this.scope.ensureDir()]);
+  async write({ overrideBitJson = false }: { overrideBitJson: boolean }): Promise<Consumer> {
+    await Promise.all([
+      this.bitJson.write({ bitDir: this.projectPath, throws: false, override: overrideBitJson }),
+      this.scope.ensureDir()
+    ]);
     this.bitMap.markAsChanged();
     await this.bitMap.write();
     return this;
@@ -567,7 +570,7 @@ export default class Consumer {
     }
     // Temp fix to support old components before the migration has been running
     bindingPrefix = bindingPrefix === 'bit' ? '@bit' : bindingPrefix;
-    return path.join('node_modules', bindingPrefix, [id.scope, id.box, id.name].join(NODE_PATH_SEPARATOR));
+    return path.join('node_modules', bindingPrefix, [id.scope, id.box, id.name].join(NODE_PATH_COMPONENT_SEPARATOR));
   }
 
   static getComponentIdFromNodeModulesPath(requirePath: string, bindingPrefix: string): string {
@@ -579,7 +582,7 @@ export default class Consumer {
     const componentName = withoutPrefix.includes('/')
       ? withoutPrefix.substr(0, withoutPrefix.indexOf('/'))
       : withoutPrefix;
-    const pathSplit = componentName.split(NODE_PATH_SEPARATOR);
+    const pathSplit = componentName.split(NODE_PATH_COMPONENT_SEPARATOR);
     if (pathSplit.length < 3) throw new GeneralError(`component has an invalid require statement: ${requirePath}`);
 
     const name = pathSplit[pathSplit.length - 1];

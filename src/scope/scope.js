@@ -20,7 +20,9 @@ import {
   BITS_DIRNAME,
   BIT_VERSION,
   DEFAULT_BIT_VERSION,
-  SCOPE_JSON
+  SCOPE_JSON,
+  COMPONENT_ORIGINS,
+  NODE_PATH_SEPARATOR
 } from '../constants';
 import { ScopeJson, getPath as getScopeJsonPath } from './scope-json';
 import {
@@ -48,7 +50,8 @@ import { index } from '../search/indexer';
 import loader from '../cli/loader';
 import { MigrationResult } from '../migration/migration-helper';
 import migratonManifest from './migrations/scope-migrator-manifest';
-import migrate, { ScopeMigrationResult } from './migrations/scope-migrator';
+import migrate from './migrations/scope-migrator';
+import type { ScopeMigrationResult } from './migrations/scope-migrator';
 import {
   BEFORE_PERSISTING_PUT_ON_SCOPE,
   BEFORE_IMPORT_PUT_ON_SCOPE,
@@ -150,10 +153,22 @@ export default class Scope {
 
   /**
    * Get a relative (to scope) path to a specific component such as compiler / tester / extension
+   * Support getting the latest installed version
    * @param {BitId} id
    */
-  static getComponentRelativePath(id: BitId): string {
-    return pathLib.join(id.box, id.name, id.scope, id.version);
+  static getComponentRelativePath(id: BitId, scopePath?: string): string {
+    const realtivePath = pathLib.join(id.box, id.name, id.scope);
+    if (!id.getVersion().latest) {
+      return pathLib.join(realtivePath, id.version);
+    }
+    if (!scopePath) {
+      throw new Error(`could not find the latest version of ${id} without the scope path`);
+    }
+    const componentFullPath = pathLib.join(scopePath, Scope.getComponentsRelativePath(), realtivePath);
+    if (!fs.existsSync(componentFullPath)) return '';
+    const versions = fs.readdirSync(componentFullPath);
+    const latestVersion = semver.maxSatisfying(versions, '*');
+    return pathLib.join(realtivePath, latestVersion);
   }
 
   getBitPathInComponentsDir(id: BitId): string {
@@ -167,15 +182,17 @@ export default class Scope {
    * @returns {Object} - wether the process run and wether it successeded
    * @memberof Consumer
    */
-  async migrate(verbose): MigrationResult {
+  async migrate(verbose: boolean): Promise<MigrationResult> {
     logger.debug('running migration process for scope');
     Analytics.addBreadCrumb('migrate', 'running migration process for scope');
     if (verbose) console.log('running migration process for scope'); // eslint-disable-line
     // We start to use this process after version 0.10.9, so we assume the scope is in the last production version
     const scopeVersion = this.scopeJson.get('version') || '0.10.9';
     if (semver.gte(scopeVersion, BIT_VERSION)) {
-      logger.debug('scope version is up to date');
-      Analytics.addBreadCrumb('migrate', 'scope version is up to date');
+      const upToDateMsg = 'scope version is up to date';
+      if (verbose) console.log(upToDateMsg); // eslint-disable-line
+      logger.debug(upToDateMsg);
+      Analytics.addBreadCrumb('migrate', upToDateMsg);
       return {
         run: false
       };
@@ -305,6 +322,34 @@ export default class Scope {
   }
 
   /**
+   * when custom-module-resolution is used, the test process needs to set the custom module
+   * directory to the dist directory
+   */
+  injectNodePathIfNeeded(consumer: Consumer, components: Component[]) {
+    const nodePathDirDist = Dists.getNodePathDir(consumer);
+    // only author components need this injection. for imported the links are built on node_modules
+    const isNodePathNeeded =
+      nodePathDirDist &&
+      components.some(
+        component =>
+          (component.dependencies.isCustomResolvedUsed() || component.devDependencies.isCustomResolvedUsed()) &&
+          (component.componentMap && component.componentMap.origin === COMPONENT_ORIGINS.AUTHORED) &&
+          !component.dists.isEmpty()
+      );
+    if (isNodePathNeeded) {
+      const getCurrentNodePathWithDirDist = () => {
+        if (!process.env.NODE_PATH) return nodePathDirDist;
+        const separator = process.env.NODE_PATH.endsWith(NODE_PATH_SEPARATOR) ? '' : NODE_PATH_SEPARATOR;
+        // $FlowFixMe
+        return process.env.NODE_PATH + separator + nodePathDirDist;
+      };
+      process.env.NODE_PATH = getCurrentNodePathWithDirDist();
+      // $FlowFixMe
+      require('module').Module._initPaths(); // eslint-disable-line
+    }
+  }
+
+  /**
    * Test multiple components sequentially, not in parallel.
    *
    * See the reason not to run them in parallel at @buildMultiple()
@@ -323,6 +368,7 @@ export default class Scope {
     logger.debug('scope.testMultiple: sequentially test multiple components');
     Analytics.addBreadCrumb('scope.testMultiple', 'scope.testMultiple: sequentially test multiple components');
     loader.start(BEFORE_RUNNING_SPECS);
+    this.injectNodePathIfNeeded(consumer, components);
     const test = async (component: Component) => {
       if (!component.tester) {
         return { componentId: component.id.toStringWithoutScope(), missingTester: true };
@@ -1059,10 +1105,12 @@ export default class Scope {
   // TODO: Change name since it also used to install extension
   async installEnvironment({
     ids,
+    dependentId,
     verbose,
     dontPrintEnvMsg
   }: {
     ids: [{ componentId: BitId, type?: string }],
+    dependentId: BitId,
     verbose?: boolean,
     dontPrintEnvMsg?: boolean
   }): Promise<ComponentWithDependencies[]> {
@@ -1107,11 +1155,18 @@ export default class Scope {
       // Destroying environment to make sure there is no left over
       env.destroyIfExist();
       await env.create();
-      const isolatedComponent = await env.isolateComponent(concreteId, isolateOpts);
-      if (!dontPrintEnvMsg) {
-        console.log(chalk.bold.green(`successfully installed the ${concreteId.toString()} ${id.type}`));
+      try {
+        const isolatedComponent = await env.isolateComponent(concreteId, isolateOpts);
+        if (!dontPrintEnvMsg) {
+          console.log(chalk.bold.green(`successfully installed the ${concreteId.toString()} ${id.type}`));
+        }
+        return isolatedComponent;
+      } catch (e) {
+        if (e instanceof ComponentNotFound) {
+          e.dependentId = dependentId.toString();
+        }
+        throw e;
       }
-      return isolatedComponent;
     };
     return pMapSeries(nonExistingEnvsIds, importEnv);
   }

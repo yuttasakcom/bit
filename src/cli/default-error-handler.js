@@ -121,7 +121,17 @@ const errorsMap: Array<[Class<Error>, (err: Class<Error>) => string]> = [
   ],
   [RemoteScopeNotFound, err => `error: remote scope "${chalk.bold(err.name)}" was not found.`],
   [InvalidBitId, () => 'error: component ID is invalid, please use the following format: [scope]/[namespace]/<name>'],
-  [ComponentNotFound, err => `error: component "${chalk.bold(err.id)}" was not found`],
+  [
+    ComponentNotFound,
+    (err) => {
+      const msg = err.dependentId
+        ? `error: the component dependency "${chalk.bold(err.id)}" required by "${chalk.bold(
+          err.dependentId
+        )}" was not found`
+        : `error: component "${chalk.bold(err.id)}" was not found`;
+      return msg;
+    }
+  ],
   [
     CorruptedComponent,
     err =>
@@ -166,7 +176,8 @@ const errorsMap: Array<[Class<Error>, (err: Class<Error>) => string]> = [
       )}
 to resolve it and merge your local and remote changes, please do the following:
 1) bit untag ${err.id} ${err.versions.join(' ')}
-2) bit import ${err.id} --merge
+2) bit import
+3) bit checkout ${err.versions.join(' ')} ${err.id}
 once your changes are merged with the new remote version, you can tag and export a new version of the component to the remote scope.`
   ],
   [
@@ -177,7 +188,8 @@ once your changes are merged with the new remote version, you can tag and export
         .join(', ')} to the remote scope.
 to resolve this conflict and merge your remote and local changes, please do the following:
 1) bit untag [id] [version]
-2) bit import --merge
+2) bit import
+3) bit checkout [version] [id]
 once your changes are merged with the new remote version, please tag and export a new version of the component to the remote scope.`
   ],
   [CyclicDependencies, err => `${err.msg.toString().toLocaleLowerCase()}`],
@@ -196,7 +208,10 @@ once your changes are merged with the new remote version, please tag and export 
   ],
   [
     ComponentSpecsFailed,
-    err => `${err.specsResultsAndIdPretty}component's tests has failed, please fix them before tagging`
+    err =>
+      `${
+        err.specsResultsAndIdPretty
+      }component tests failed. please make sure all tests pass before tagging a new version or use the "--force" flag to force-tag components.\nto view test failures, please use the "--verbose" flag or use the "bit test" command`
   ],
   [
     MissingDependencies,
