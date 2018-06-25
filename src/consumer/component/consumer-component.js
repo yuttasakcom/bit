@@ -827,12 +827,14 @@ export default class Component {
     scope,
     save,
     consumer,
+    noCache,
     verbose,
     keep
   }: {
     scope: Scope,
     save?: boolean,
     consumer?: Consumer,
+    noCache?: boolean,
     verbose?: boolean,
     keep?: boolean
   }): Promise<?Dists> {
@@ -853,6 +855,8 @@ export default class Component {
     // If there is no consumer, it comes from the scope or isolated environment, which the dists are already saved.
     // If there is consumer, check whether the component was modified. If it wasn't, no need to re-build.
     const isNeededToReBuild = async () => {
+      // Forcly rebuild
+      if (noCache) return true;
       if (!consumer) return false;
       const componentStatus = await consumer.getComponentStatusById(this.id);
       return componentStatus.modified;
@@ -1018,7 +1022,7 @@ export default class Component {
     });
   }
 
-  static fromObject(object: Object): Component {
+  static async fromObject(object: Object): Component {
     const {
       name,
       box,
@@ -1049,8 +1053,8 @@ export default class Component {
       scope,
       lang,
       bindingPrefix,
-      compiler: compiler ? CompilerExtension.loadFromModelObject(compiler) : null,
-      tester: tester ? TesterExtension.loadFromModelObject(tester) : null,
+      compiler: compiler ? await CompilerExtension.loadFromModelObject(compiler) : null,
+      tester: tester ? await TesterExtension.loadFromModelObject(tester) : null,
       dependencies,
       devDependencies,
       packageDependencies,
@@ -1067,7 +1071,7 @@ export default class Component {
     });
   }
 
-  static fromString(str: string): Component {
+  static async fromString(str: string): Component {
     const object = JSON.parse(str);
     object.files = SourceFile.loadFromParsedStringArray(object.files);
 

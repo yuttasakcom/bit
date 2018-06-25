@@ -39,14 +39,14 @@ jobs:
     working_directory: ~/bit
     steps:
       # prod registry
-    #   - run: npm config set @bit:registry https://node.bitsrc.io
-    #   - run: echo "//node.bitsrc.io/:_authToken=$registryProdToken" >> ~/.npmrc
+      - run: npm config set @bit:registry https://node.bitsrc.io
+      - run: echo "//node.bitsrc.io/:_authToken=$registryProdToken" >> ~/.npmrc
       # stage registry
-      - run: npm config set @bit:registry https://node-stg.bitsrc.io
-      - run: echo "//node-stg.bitsrc.io/:_authToken=$registryStgToken" >> ~/.npmrc
+    #   - run: npm config set @bit:registry https://node-stg.bitsrc.io
+    #   - run: echo "//node-stg.bitsrc.io/:_authToken=$registryStgToken" >> ~/.npmrc
       - save_cache:
-        #   key: bitsrc-registry1
-          key: bitsrc-registry-stg2
+          key: bitsrc-registry1
+        #   key: bitsrc-registry-stg2
           paths:
             - ~/.npmrc
 
@@ -162,6 +162,28 @@ jobs:
       - store_artifacts:
           path: bit/junit
 
+  unit_test_bit_javascript:
+    docker:
+    - image: circleci/node:6.10.3
+    working_directory: ~/bit
+    steps:
+    - run:
+        name: save SHA to a file
+        command: echo $CIRCLE_SHA1 > .circle-sha
+    - attach_workspace:
+        at: ./
+    - run: cd bit-javascript && mkdir junit
+    - run:
+        name: Run unit tests
+        command: cd bit-javascript && npm run test-circle
+        environment:
+            MOCHA_FILE: junit/unit-test-results.xml
+        when: always
+    - store_test_results:
+        path: bit-javascript/junit
+    - store_artifacts:
+        path: bit-javascript/junit
+
   lint:
     docker:
       - image: circleci/node:6.10.3
@@ -190,7 +212,7 @@ jobs:
     environment:
       # change the npm config to avoid using sudo
       NPM_CONFIG_PREFIX: ~/.npm-global
-      BITSRC_ENV: stg
+      BITSRC_ENV: prod
     parallelism: 4
     steps:
       - attach_workspace:
@@ -206,8 +228,8 @@ jobs:
       - restore_cache:
           key: bitsrc-ssh-key3
       - restore_cache:
-        #   key: bitsrc-registry1
-          key: bitsrc-registry-stg2
+          key: bitsrc-registry1
+        #   key: bitsrc-registry-stg2
       - restore_cache:
           keys:
             - builded-{{ checksum ".circle-sha" }}
@@ -226,7 +248,7 @@ jobs:
       - run: bit config set user.name tester
       - run: bit config set user.email ci@bitsrc.io
       # uncomment to configure circle to run against stg enviorment
-      - run: bit config set hub_domain hub-stg.bitsrc.io
+    #   - run: bit config set hub_domain hub-stg.bitsrc.io
 
       - run:
           name: Run e2e tests
@@ -265,6 +287,9 @@ workflows:
       - unit_test:
           requires:
             - build
+      - unit_test_bit_javascript:
+          requires:
+            - build_bit_javascript
       - lint:
           requires:
             - install_npm_deps

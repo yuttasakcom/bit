@@ -243,6 +243,7 @@ describe('bit tag command', function () {
     });
   });
   describe('tag one component with failing tests', () => {
+    let scopeBeforeTagging;
     before(() => {
       helper.importTester('bit.envs/testers/mocha@0.0.12');
       const failingTest = `const expect = require('chai').expect;
@@ -256,6 +257,7 @@ describe('bit tag command', function () {
       helper.createFile('bar', 'foo.spec.js', failingTest);
       helper.installNpmPackage('chai', '4.1.2');
       helper.addComponentWithOptions('bar/foo.js', { t: 'bar/foo.spec.js', i: 'bar/foo' });
+      scopeBeforeTagging = helper.cloneLocalScope();
     });
     it('should throw error if the bit id does not exists', () => {
       let output;
@@ -295,7 +297,9 @@ describe('bit tag command', function () {
         }
       });
       it('should throw a general error saying the tests failed', () => {
-        expect(output).to.have.string("component's tests has failed, please fix them before tagging");
+        expect(output).to.have.string(
+          'component tests failed. please make sure all tests pass before tagging a new version or use the "--force" flag to force-tag components.\nto view test failures, please use the "--verbose" flag or use the "bit test" command\n'
+        );
       });
       it('should not display the tests results', () => {
         expect(output).to.not.have.string('failing test should fail');
@@ -322,16 +326,47 @@ describe('bit tag command', function () {
         expect(output).to.have.string('file: bar/foo.spec.js');
       });
       it('should also display a general error saying the tests failed', () => {
-        expect(output).to.have.string("component's tests has failed, please fix them before tagging");
+        expect(output).to.have.string(
+          'component tests failed. please make sure all tests pass before tagging a new version or use the "--force" flag to force-tag components.\nto view test failures, please use the "--verbose" flag or use the "bit test" command\n'
+        );
       });
     });
     describe('tagging with --force flag', () => {
       let output;
       before(() => {
+        helper.getClonedLocalScope(scopeBeforeTagging);
         output = helper.tagWithoutMessage('bar/foo --force');
       });
       it('should tag successfully although the tests failed', () => {
         expect(output).to.have.string('1 components tagged');
+      });
+      it('should not display any data about the tests', () => {
+        expect(output).to.not.have.string("component's specs does not pass, fix them and tag");
+        expect(output).to.not.have.string('failing test should fail');
+      });
+    });
+    describe('tagging with --skip-tests flag', () => {
+      let output;
+      before(() => {
+        helper.getClonedLocalScope(scopeBeforeTagging);
+        output = helper.tagWithoutMessage('bar/foo --skip-tests');
+      });
+      it('should tag successfully although the tests failed', () => {
+        expect(output).to.have.string('1 components tagged');
+      });
+      it('should not display any data about the tests', () => {
+        expect(output).to.not.have.string("component's specs does not pass, fix them and tag");
+        expect(output).to.not.have.string('failing test should fail');
+      });
+    });
+    describe('tagging all with --skip-tests flag', () => {
+      let output;
+      before(() => {
+        helper.getClonedLocalScope(scopeBeforeTagging);
+        output = helper.tagAllWithoutMessage('--skip-tests');
+      });
+      it('should tag successfully although the tests failed', () => {
+        expect(output).to.have.string('5 components tagged');
       });
       it('should not display any data about the tests', () => {
         expect(output).to.not.have.string("component's specs does not pass, fix them and tag");
@@ -653,7 +688,7 @@ describe('bit tag command', function () {
         }
       });
 
-      it('Should print that the component is commited', () => {
+      it('Should print that the component is committed', () => {
         expect(output).to.have.string('1 components tagged');
       });
     });

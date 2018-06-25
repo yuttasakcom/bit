@@ -19,7 +19,7 @@ import {
   BIT_HIDDEN_DIR,
   COMPONENT_ORIGINS,
   BIT_VERSION,
-  NODE_PATH_SEPARATOR,
+  NODE_PATH_COMPONENT_SEPARATOR,
   LATEST_BIT_VERSION,
   BIT_GIT_DIR,
   DOT_GIT_DIR
@@ -427,15 +427,19 @@ export default class Consumer {
       componentFromModel.files = R.sortBy(R.prop('relativePath'), componentFromModel.files);
 
       version.packageDependencies = sortObject(version.packageDependencies);
+      version.devPackageDependencies = sortObject(version.devPackageDependencies);
+      version.peerPackageDependencies = sortObject(version.peerPackageDependencies);
       componentFromModel.packageDependencies = sortObject(componentFromModel.packageDependencies);
-      // uncomment to easily understand why two components are considered as modified
-      // if (componentFromModel.hash().hash !== version.hash().hash) {
-      //   console.log('-------------------componentFromModel------------------------');
-      //   console.log(componentFromModel.id());
-      //   console.log('------------------------version------------------------------');
-      //   console.log(version.id());
-      //   console.log('-------------------------END---------------------------------');
-      // }
+      componentFromModel.devPackageDependencies = sortObject(componentFromModel.devPackageDependencies);
+      componentFromModel.peerPackageDependencies = sortObject(componentFromModel.peerPackageDependencies);
+      // prefix your command with "BIT_LOG=*" to see the actual id changes
+      if (process.env.BIT_LOG && componentFromModel.hash().hash !== version.hash().hash) {
+        console.log('-------------------componentFromModel------------------------'); // eslint-disable-line no-console
+        console.log(componentFromModel.id()); // eslint-disable-line no-console
+        console.log('------------------------componentFromFileSystem (version)----'); // eslint-disable-line no-console
+        console.log(version.id()); // eslint-disable-line no-console
+        console.log('-------------------------END---------------------------------'); // eslint-disable-line no-console
+      }
       componentFromFileSystem._isModified = componentFromModel.hash().hash !== version.hash().hash;
     }
     return componentFromFileSystem._isModified;
@@ -511,7 +515,8 @@ export default class Consumer {
     force: ?boolean,
     verbose: ?boolean,
     ignoreMissingDependencies: ?boolean,
-    ignoreNewestVersion: boolean
+    ignoreNewestVersion: boolean,
+    skipTests: boolean = false
   ): Promise<{ taggedComponents: Component[], autoTaggedComponents: ModelComponent[] }> {
     logger.debug(`committing the following components: ${ids.join(', ')}`);
     Analytics.addBreadCrumb('tag', `committing the following components: ${Analytics.hashData(ids)}`);
@@ -535,6 +540,7 @@ export default class Consumer {
       force,
       consumer: this,
       ignoreNewestVersion,
+      skipTests,
       verbose
     });
 
@@ -570,7 +576,7 @@ export default class Consumer {
     }
     // Temp fix to support old components before the migration has been running
     bindingPrefix = bindingPrefix === 'bit' ? '@bit' : bindingPrefix;
-    return path.join('node_modules', bindingPrefix, [id.scope, id.box, id.name].join(NODE_PATH_SEPARATOR));
+    return path.join('node_modules', bindingPrefix, [id.scope, id.box, id.name].join(NODE_PATH_COMPONENT_SEPARATOR));
   }
 
   static getComponentIdFromNodeModulesPath(requirePath: string, bindingPrefix: string): string {
@@ -582,7 +588,7 @@ export default class Consumer {
     const componentName = withoutPrefix.includes('/')
       ? withoutPrefix.substr(0, withoutPrefix.indexOf('/'))
       : withoutPrefix;
-    const pathSplit = componentName.split(NODE_PATH_SEPARATOR);
+    const pathSplit = componentName.split(NODE_PATH_COMPONENT_SEPARATOR);
     if (pathSplit.length < 3) throw new GeneralError(`component has an invalid require statement: ${requirePath}`);
 
     const name = pathSplit[pathSplit.length - 1];
