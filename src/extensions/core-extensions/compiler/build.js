@@ -11,6 +11,7 @@ type Workspace = $PropertyType<ExtensionContext, 'workspace'>;
 
 export async function build(
   context: ExtensionContext,
+  props: Object,
   id: string,
   noCache: boolean,
   verbose: boolean
@@ -18,7 +19,8 @@ export async function build(
   const workspace: Workspace = context.workspace;
   const bitId = workspace.getBitIdFromString(id);
   const [component: Component] = await workspace.loadComponents([bitId]);
-  const result = await buildComponent({ component, store: workspace.scope, noCache, workspace, verbose });
+  const compilers = props.compilers;
+  const result = await buildComponent({ component, compilers, store: workspace.scope, noCache, workspace, verbose });
   if (result === null) return null;
   const distFilePaths = await component.dists.writeDists(component, workspace);
   workspace.bitMap.addMainDistFileToComponent(component.id, distFilePaths);
@@ -26,7 +28,12 @@ export async function build(
   return distFilePaths;
 }
 
-export async function buildAll(context: ExtensionContext, noCache: boolean, verbose: boolean): Promise<Object> {
+export async function buildAll(
+  context: ExtensionContext,
+  props: Object,
+  noCache: boolean,
+  verbose: boolean
+): Promise<Object> {
   const workspace: Workspace = context.workspace;
   const authoredAndImportedIds = workspace.bitMap.getAllBitIds([
     COMPONENT_ORIGINS.IMPORTED,

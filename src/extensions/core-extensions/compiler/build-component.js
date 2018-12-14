@@ -3,25 +3,26 @@ import path from 'path';
 import fs from 'fs-extra';
 import Vinyl from 'vinyl';
 import Dists from './dists';
-import ConsumerComponent from '../component/consumer-component';
-import { Scope } from '../../scope';
-import InvalidCompilerInterface from '../component/exceptions/invalid-compiler-interface';
-import IsolatedEnvironment from '../../environment';
-import ComponentMap from '../bit-map/component-map';
-import { BitId } from '../../bit-id';
-import logger from '../../logger/logger';
-import { DEFAULT_DIST_DIRNAME } from '../../constants';
-import ExternalBuildErrors from '../component/exceptions/external-build-errors';
-import type { PathLinux } from '../../utils/path';
-import { isString } from '../../utils';
-import GeneralError from '../../error/general-error';
+import IsolatedEnvironment from '../../../environment';
+import ComponentMap from '../../../consumer/bit-map/component-map';
+import { BitId } from '../../../bit-id';
+import logger from '../../../logger/logger';
+import { DEFAULT_DIST_DIRNAME } from '../../../constants';
+import ExternalBuildErrors from '../../../consumer/component/exceptions/external-build-errors';
+import type { PathLinux } from '../../../utils/path';
+import { isString } from '../../../utils';
+import GeneralError from '../../../error/general-error';
 import Dist from './dist';
-import { writeEnvFiles } from './eject-conf';
+import { writeEnvFiles } from '../../../consumer';
 import Workspace from '../../context/workspace';
 import Store from '../../context/store';
+import type { Compiler } from './CompilerInterface';
+import { Component } from '../../types';
+import InvalidCompilerInterface from '../../../consumer/component/exceptions/invalid-compiler-interface';
 
 export default (async function buildComponent({
   component,
+  compilers,
   store,
   save,
   workspace,
@@ -29,7 +30,8 @@ export default (async function buildComponent({
   verbose,
   keep
 }: {
-  component: ConsumerComponent,
+  component: Component,
+  compilers: Compiler[],
   store: Store,
   save?: boolean,
   workspace?: Workspace,
@@ -39,15 +41,15 @@ export default (async function buildComponent({
 }): Promise<?Dists> {
   logger.debug(`consumer-component.build ${component.id.toString()}`);
   // @TODO - write SourceMap Type
-  if (!component.compiler) {
-    if (!workspace || workspace.shouldDistsBeInsideTheComponent()) {
+  if (!compilers || !compilers.length) {
+    if (!workspace || shouldDistsBeInsideTheComponent(workspace)) {
       logger.debug('compiler was not found, nothing to build');
       return null;
     }
     logger.debug(
       'compiler was not found, however, because the dists are set to be outside the components directory, save the source file as dists'
     );
-    component.copyFilesIntoDists();
+    copyFilesIntoDists(component);
     return component.dists;
   }
 
@@ -68,6 +70,7 @@ export default (async function buildComponent({
   const builtFiles =
     (await _buildIfNeeded({
       component,
+      compilers,
       workspace,
       componentMap,
       store,
@@ -80,7 +83,7 @@ export default (async function buildComponent({
       throw new GeneralError('builder interface has to return object with a code attribute that contains string');
     }
   });
-  component.setDists(builtFiles.map(file => new Dist(file)));
+  setDists(component, builtFiles.map(file => new Dist(file)));
 
   if (save) {
     await store.sources.updateDist({ source: component });
@@ -88,8 +91,22 @@ export default (async function buildComponent({
   return component.dists;
 });
 
+function shouldDistsBeInsideTheComponent(workspace: Workspace): boolean {
+  return !workspace.bitJson.distEntry && !workspace.bitJson.distTarget;
+}
+
+function copyFilesIntoDists(component: Component) {
+  const dists = component.files.map(file => new Dist({ base: file.base, path: file.path, contents: file.contents }));
+  setDists(component, dists);
+}
+
+function setDists(component: Component, dists?: Dist[]) {
+  component.dists = new Dists(dists);
+}
+
 async function _buildIfNeeded({
   component,
+  compilers,
   workspace,
   componentMap,
   store,
@@ -97,7 +114,8 @@ async function _buildIfNeeded({
   directory,
   keep
 }: {
-  component: ConsumerComponent,
+  component: Component,
+  compilers: Compiler[],
   workspace?: Workspace,
   componentMap?: ?ComponentMap,
   store: Store,
@@ -105,44 +123,47 @@ async function _buildIfNeeded({
   directory?: ?string,
   keep: ?boolean
 }): Promise<Vinyl[]> {
-  const compiler = component.compiler;
-
-  if (!compiler) {
+  if (!compilers || !compilers.length) {
     throw new GeneralError('compiler was not found, nothing to build');
   }
 
-  if (!compiler.action && !compiler.oldAction) {
-    throw new InvalidCompilerInterface(compiler.name);
-  }
+  const compilerResultsP = compilers.map(async (compiler) => {
+    if (!compiler.compile) {
+      throw new InvalidCompilerInterface(compiler.id);
+    }
+    if (workspace) { return _runBuild({ component, compiler, componentRoot: workspace.getPath(), workspace, componentMap, verbose }); }
+    if (component.isolatedEnvironment) {
+      return _runBuild({ component, compiler, componentRoot: component.writtenPath, workspace, componentMap, verbose });
+    }
 
-  if (workspace) return _runBuild({ component, componentRoot: workspace.getPath(), workspace, componentMap, verbose });
-  if (component.isolatedEnvironment) {
-    return _runBuild({ component, componentRoot: component.writtenPath, workspace, componentMap, verbose });
-  }
-
-  const isolatedEnvironment = new IsolatedEnvironment(store, directory);
-  try {
-    await isolatedEnvironment.create();
-    const isolateOpts = {
-      verbose,
-      installPackages: true,
-      noPackageJson: false
-    };
-    const componentWithDependencies = await isolatedEnvironment.isolateComponent(component.id, isolateOpts);
-    const isolatedComponent = componentWithDependencies.component;
-    const result = await _runBuild({
-      component,
-      componentRoot: isolatedComponent.writtenPath,
-      workspace,
-      componentMap,
-      verbose
-    });
-    if (!keep) await isolatedEnvironment.destroy();
-    return result;
-  } catch (err) {
-    await isolatedEnvironment.destroy();
-    throw err;
-  }
+    const isolatedEnvironment = new IsolatedEnvironment(store, directory);
+    try {
+      await isolatedEnvironment.create();
+      const isolateOpts = {
+        verbose,
+        installPackages: true,
+        noPackageJson: false
+      };
+      const componentWithDependencies = await isolatedEnvironment.isolateComponent(component.id, isolateOpts);
+      const isolatedComponent = componentWithDependencies.component;
+      const result = await _runBuild({
+        component,
+        compiler,
+        componentRoot: isolatedComponent.writtenPath,
+        workspace,
+        componentMap,
+        verbose
+      });
+      if (!keep) await isolatedEnvironment.destroy();
+      return result;
+    } catch (err) {
+      await isolatedEnvironment.destroy();
+      throw err;
+    }
+  });
+  const compilerResults = await Promise.all(compilerResultsP);
+  // @todo: what to do with
+  return compilerResults;
 }
 
 // Ideally it's better to use the dists from the model.
@@ -158,38 +179,39 @@ const _isNeededToReBuild = async (workspace: ?Workspace, componentId: BitId, noC
 
 const _runBuild = async ({
   component,
+  compiler,
   componentRoot,
-  consumer,
+  workspace,
   componentMap,
   verbose
 }: {
-  component: ConsumerComponent,
+  component: Component,
+  compiler: Compiler,
   componentRoot: PathLinux,
-  consumer: ?Workspace,
-  componentMap: ComponentMap,
+  workspace: ?Workspace,
+  componentMap: ?ComponentMap,
   verbose: boolean
 }): Promise<Vinyl[]> => {
-  const compiler = component.compiler;
   if (!compiler) {
     throw new GeneralError('compiler was not found, nothing to build');
   }
 
   let rootDistDir = path.join(componentRoot, DEFAULT_DIST_DIRNAME);
-  const consumerPath = consumer ? consumer.getPath() : '';
+  const consumerPath = workspace ? workspace.getPath() : '';
   const files = component.files.map(file => file.clone());
   let tmpFolderFullPath;
 
   let componentDir = '';
   if (componentMap) {
     // $FlowFixMe
-    rootDistDir = component.dists.getDistDirForConsumer(consumer, componentMap.rootDir);
+    rootDistDir = component.dists.getDistDirForConsumer(workspace, componentMap.rootDir);
     if (consumerPath && componentMap && componentMap.getComponentDir()) {
       componentDir = componentMap.getComponentDir() || '';
     }
   }
   return Promise.resolve()
     .then(async () => {
-      if (!compiler.action && !compiler.oldAction) {
+      if (!compiler.compile) {
         throw new InvalidCompilerInterface(compiler.name);
       }
 
@@ -201,50 +223,44 @@ const _runBuild = async ({
 
       // Change the cwd to make sure we found the needed files
       process.chdir(componentRoot);
-      if (compiler.action) {
-        const shouldWriteConfig = compiler.writeConfigFilesOnAction && component.getDetachedCompiler();
-        // Write config files to tmp folder
-        if (shouldWriteConfig) {
-          tmpFolderFullPath = component.getTmpFolder(consumerPath);
-          if (verbose) {
-            console.log(`\nwriting config files to ${tmpFolderFullPath}`); // eslint-disable-line no-console
-          }
-          await writeEnvFiles({
-            fullConfigDir: tmpFolderFullPath,
-            env: compiler,
-            consumer,
-            component,
-            deleteOldFiles: false,
-            verbose
-          });
+      const shouldWriteConfig = compiler.writeConfigFilesOnAction && component.getDetachedCompiler();
+      // Write config files to tmp folder
+      if (shouldWriteConfig) {
+        tmpFolderFullPath = component.getTmpFolder(consumerPath);
+        if (verbose) {
+          console.log(`\nwriting config files to ${tmpFolderFullPath}`); // eslint-disable-line no-console
         }
+        await writeEnvFiles({
+          fullConfigDir: tmpFolderFullPath,
+          env: compiler,
+          consumer: workspace,
+          component,
+          deleteOldFiles: false,
+          verbose
+        });
+      }
 
-        const actionParams = {
-          files,
-          rawConfig: compiler.rawConfig,
-          dynamicConfig: compiler.dynamicConfig,
-          configFiles: compiler.files,
-          api: compiler.api,
-          context
-        };
-        const result = await compiler.action(actionParams);
-        if (tmpFolderFullPath) {
-          if (verbose) {
-            console.log(`\ndeleting tmp directory ${tmpFolderFullPath}`); // eslint-disable-line no-console
-          }
-          logger.info(`build-components, deleting ${tmpFolderFullPath}`);
-          await fs.remove(tmpFolderFullPath);
+      const actionParams = {
+        files,
+        rawConfig: compiler.rawConfig,
+        dynamicConfig: compiler.dynamicConfig,
+        configFiles: compiler.files,
+        api: compiler.api,
+        context
+      };
+      const result = await compiler.compile(actionParams);
+      if (tmpFolderFullPath) {
+        if (verbose) {
+          console.log(`\ndeleting tmp directory ${tmpFolderFullPath}`); // eslint-disable-line no-console
         }
-        // TODO: Gilad - handle return of main dist file
-        if (!result || !result.files) {
-          throw new Error('compiler return invalid response');
-        }
-        return result.files;
+        logger.info(`build-components, deleting ${tmpFolderFullPath}`);
+        await fs.remove(tmpFolderFullPath);
       }
-      if (!compiler.oldAction) {
-        throw new InvalidCompilerInterface(compiler.name);
+      // TODO: Gilad - handle return of main dist file
+      if (!result || !result.files) {
+        throw new Error('compiler return invalid response');
       }
-      return compiler.oldAction(files, rootDistDir, context);
+      return result.files;
     })
     .catch((e) => {
       if (tmpFolderFullPath) {

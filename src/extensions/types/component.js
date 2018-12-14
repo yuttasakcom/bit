@@ -1,6 +1,7 @@
 // @flow
 
 // import BaseType, { ModelStore } from './base-type';
+import { BitId } from '../../bit-id';
 import BaseType from './base-type';
 import ConsumerComponent from '../../consumer/component';
 import ExtensionWrapper from '../extension-wrapper';
@@ -8,6 +9,7 @@ import ExtensionWrapper from '../extension-wrapper';
 export type ComponentId = string;
 
 export default class Component extends BaseType {
+  __consumerComponent: ConsumerComponent;
   name: string;
   version: ?string;
   scope: ?string;
@@ -57,6 +59,10 @@ export default class Component extends BaseType {
     // TODO: load component
   }
 
+  get id(): BitId {
+    return this.__consumerComponent.id;
+  }
+
   // Called before saving type to models
   toStore(): ModelStore {
     return this.toObject();
@@ -80,6 +86,10 @@ export default class Component extends BaseType {
 
   static fromConsumerComponent(consumerComponent: ConsumerComponent): Component {
     return new Component(consumerComponent);
+  }
+
+  getTmpFolder(workspacePrefix: PathOsBased = ''): PathOsBased {
+    return this.__consumerComponent.getTmpFolder(workspacePrefix);
   }
 }
 

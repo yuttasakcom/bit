@@ -1,15 +1,12 @@
 // @flow
 import { build, buildAll } from './build';
 import type { ExtensionContext } from '../../extensions-loader';
+import SuperExtension from '../../super-extension';
 
-export default class Compiler {
+export default class Compiler extends SuperExtension {
   dists: { [id: string]: files[] };
   props: Object;
   context: ExtensionContext;
-  constructor(props, context: ExtensionContext) {
-    this.props = props;
-    this.context = context;
-  }
   addCommandHook(): Object {
     return {
       name: 'compile [id]',
@@ -32,8 +29,8 @@ export default class Compiler {
       verbose: boolean
     }
   ): Promise<any> {
-    if (!id) return buildAll(this.context, noCache, verbose);
-    return build(this.context, id, noCache, verbose);
+    if (!id) return buildAll(this.context, this.props, noCache, verbose);
+    return build(this.context, this.props, id, noCache, verbose);
   }
   report(result) {}
   compileComponent(component) {

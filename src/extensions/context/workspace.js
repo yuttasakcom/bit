@@ -45,6 +45,10 @@ export default class Workspace {
     return new Workspace(props);
   }
 
+  getPath() {
+    return this.workspacePath;
+  }
+
   // TODO: write docs
   async loadComponents(
     ids: BitIds | BitId[],
