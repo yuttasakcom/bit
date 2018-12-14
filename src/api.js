@@ -7,10 +7,15 @@ import { scopeList } from './api/scope/index';
 import HooksManager from './hooks';
 import types from './extensions/types/type-factory';
 import Command from './cli/command';
+import Extension from './extensions/super-extension';
+import type { LifeCycleInterface } from './extensions/hook-interfaces/lifecycle';
+import type { AddHookInterface } from './extensions/hook-interfaces/add-command';
+
+export type { LifeCycleInterface, AddHookInterface };
 
 HooksManager.init();
 
-module.exports = {
+export default {
   show: (scopePath: string, id: string, opts: Object) =>
     getScopeComponent({ scopePath, id, allVersions: opts && opts.versions }).then((c) => {
       if (Array.isArray(c)) {
@@ -24,7 +29,7 @@ module.exports = {
     return addMany(components, alternateCwd);
   },
   types,
-  Extension: class Extension {},
+  Extension,
   Command
   /**
    * Load extension programmatically
