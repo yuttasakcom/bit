@@ -202,8 +202,10 @@ export default class ComponentLoader {
   _isAngularProject(): boolean {
     return Boolean(
       this.consumer.config.packageJsonObject &&
-        this.consumer.config.packageJsonObject.dependencies &&
-        this.consumer.config.packageJsonObject.dependencies[ANGULAR_PACKAGE_IDENTIFIER]
+        ((this.consumer.config.packageJsonObject.dependencies &&
+          this.consumer.config.packageJsonObject.dependencies[ANGULAR_PACKAGE_IDENTIFIER]) ||
+          (this.consumer.config.packageJsonObject.peerDependencies &&
+            this.consumer.config.packageJsonObject.peerDependencies[ANGULAR_PACKAGE_IDENTIFIER]))
     );
   }
 
