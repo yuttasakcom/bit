@@ -6,7 +6,7 @@ import fs from 'fs-extra';
 import Ajv from 'ajv';
 import semver from 'semver';
 import logger, { createExtensionLogger } from '../logger/logger';
-import { Scope } from '../scope';
+import { Scope, loadScope } from '../scope';
 import { BitId } from '../bit-id';
 import type { EnvExtensionOptions } from './env-extension-types';
 import type { ExtensionOptions } from './extension';
@@ -17,6 +17,8 @@ import { Analytics } from '../analytics/analytics';
 import ExtensionLoadError from './exceptions/extension-load-error';
 import Environment from '../environment';
 import ExtensionSchemaError from './exceptions/extension-schema-error';
+import Isolator from '../environment/isolator';
+import { loadConsumer } from '../consumer';
 
 const ajv = new Ajv();
 
@@ -98,7 +100,7 @@ export default class BaseExtension {
   context: ?Object;
   script: ?Function; // Store the required plugin
   _initOptions: ?InitOptions; // Store the required plugin
-  api = _getConcreteBaseAPI({ name: this.name });
+  api = _getConcreteBaseAPI({ name: this.name, context: this.context });
 
   constructor(extensionProps: BaseExtensionProps) {
     this.name = extensionProps.name;
@@ -152,7 +154,8 @@ export default class BaseExtension {
         initOptions = this.script.init({
           rawConfig: this.rawConfig,
           dynamicConfig: this.dynamicConfig,
-          api: this.api
+          api: this.api,
+          context: this.context
         });
       }
       // wrap in promise, in case a script has async init
@@ -220,6 +223,7 @@ export default class BaseExtension {
       throws
     });
     if (baseProps.loaded) {
+      this.context = Object.assign(this.context || {}, { scopePath });
       this.loaded = baseProps.loaded;
       this.script = baseProps.script;
       this.dynamicConfig = baseProps.dynamicConfig;
@@ -262,7 +266,8 @@ export default class BaseExtension {
     context
   }: BaseLoadArgsProps): Promise<BaseExtensionProps> {
     logger.debug(`base-extension loading ${name}`);
-    const concreteBaseAPI = _getConcreteBaseAPI({ name });
+    const finalContext = Object.assign(context || {}, { consumerPath, scopePath });
+    const concreteBaseAPI = _getConcreteBaseAPI({ name, context: finalContext });
     if (options.file) {
       let absPath = options.file;
       const file = options.file || '';
@@ -276,7 +281,7 @@ export default class BaseExtension {
         options,
         throws
       });
-      const extensionProps: BaseExtensionProps = { api: concreteBaseAPI, context, ...staticExtensionProps };
+      const extensionProps: BaseExtensionProps = { api: concreteBaseAPI, context: finalContext, ...staticExtensionProps };
       extensionProps.api = concreteBaseAPI;
       return extensionProps;
     }
@@ -506,14 +511,59 @@ const baseApi = {
   /**
    * API to get logger
    */
-  getLogger: (name): Function => () => createExtensionLogger(name)
+  getLogger: (name): Function => () => createExtensionLogger(name),
+  getIsolateFunc: (workspacePath?: string, scopePath: string) => async (componentId: string | BitId, targetDir?: string) => {
+    let consumer;
+    let scope;
+    if (workspacePath) {
+      consumer = await loadConsumer(workspacePath);
+      scope = consumer.scope;
+    } else {
+      scope = await Scope.load(scopePath);
+    }
+    const parsedCompId = typeof componentId === 'string' ? consumer.getParsedId(componentId) : componentId;
+    const isolator = await Isolator.getInstance('fs', scope, consumer, targetDir);
+    const componentWithDependencies = await isolator.isolate(parsedCompId, {
+      dist: true
+    });
+    const installPackages = async (packages: string[] = []) => {
+      await isolator.installPackagesOnRoot(packages);
+      // after installing packages on capsule root, some links/symlinks from node_modules might
+      // be deleted. rewrite the links to recreate them.
+      await isolator.writeLinksOnNodeModules();
+    };
+    const capsuleFiles = componentWithDependencies.component.files;
+    return {
+      capsule: isolator.capsule,
+      capsuleFiles,
+      componentWithDependencies,
+      writeLinks: () => isolator.writeLinks(),
+      capsuleExec: (cmd, options) => isolator.capsuleExec(cmd, options),
+      installPackages
+    };
+  }
 };
 
 /**
  * Function which get actual params and return a concrete base api
  */
-const _getConcreteBaseAPI = ({ name }: { name: string }) => {
+const _getConcreteBaseAPI = ({ name, context }: { name: string, context?: Object }) => {
   const concreteBaseAPI = R.clone(baseApi);
   concreteBaseAPI.getLogger = baseApi.getLogger(name);
+  const workspacePath = context ? context.consumerPath : null;
+  const scopePath = context ? context.scopePath : null;
+  if (scopePath) {
+    concreteBaseAPI.isolate = baseApi.getIsolateFunc(workspacePath, scopePath);
+  }
   return concreteBaseAPI;
 };
+
+const _isolateApi = async (componentId: string, targetDir?: string): Function => {
+  const consumer = loadConsumer(workspacePath);
+  const scope = loadScope(scopePath);
+  const isolator = await Isolator.getInstance('fs', scope, consumer, targetDir);
+  const componentWithDependencies = await isolator.isolate(component.id, {
+    shouldBuildDependencies,
+    dist: false
+  });
+}
