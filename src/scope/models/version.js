@@ -508,10 +508,10 @@ export default class Version extends BitObject {
     const compiler = component.compiler ? component.compiler.toModelObject() : undefined;
     const tester = component.tester ? component.tester.toModelObject() : undefined;
 
-    const compilerDynamicPakageDependencies = component.compiler
+    const compilerDynamicPackageDependencies = component.compiler
       ? component.compiler.dynamicPackageDependencies
       : undefined;
-    const testerDynamicPakageDependencies = component.tester ? component.tester.dynamicPackageDependencies : undefined;
+    const testerDynamicPackageDependencies = component.tester ? component.tester.dynamicPackageDependencies : undefined;
     const compilerFromModel = R.path(['compiler'], versionFromModel);
     const testerFromModel = R.path(['tester'], versionFromModel);
     return new Version({
@@ -539,11 +539,11 @@ export default class Version extends BitObject {
       peerPackageDependencies: component.peerPackageDependencies,
       compilerPackageDependencies: {
         ...component.compilerPackageDependencies,
-        ...compilerDynamicPakageDependencies
+        ...compilerDynamicPackageDependencies
       },
       testerPackageDependencies: {
         ...component.testerPackageDependencies,
-        ...testerDynamicPakageDependencies
+        ...testerDynamicPackageDependencies
       },
       flattenedDependencies,
       flattenedDevDependencies,
