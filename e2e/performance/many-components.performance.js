@@ -35,6 +35,20 @@ const maxFlattenedDependencies = 100;
  * status 3,000 with maxFlattenedDependencies of 100 => 46 sec
  * export 3,000 with maxFlattenedDependencies of 100 => 90 sec
  * import 3,000 with maxFlattenedDependencies of 100 => 475 sec
+ *
+ * 14.3.0. 3,000 with maxFlattenedDependencies of 100.
+ * add => 9 sec
+ * tag => 144 sec
+ * status => 46 sec
+ * export => 127 sec
+ * import => 497 sec
+ *
+ * 14.3.0 with compilers. 3,000 with maxFlattenedDependencies of 100.
+ * add => N/A
+ * tag => 160 sec
+ * status => 50 sec
+ * export => 123 sec
+ * import => JavaScript heap out of memory
  */
 describe('many components', function () {
   this.timeout(0);
@@ -67,7 +81,7 @@ describe('many components', function () {
       it('should take less then 1 minutes to complete', () => {
         expect(addTimeInSeconds).to.be.lessThan(1 * 60);
       });
-      describe('tag command', () => {
+      describe('tag command (it also builds)', () => {
         let tagTimeInSeconds;
         before(() => {
           const start = process.hrtime();
@@ -112,6 +126,72 @@ describe('many components', function () {
             it('should take less then 20 minutes to complete', () => {
               expect(importTimeInSeconds).to.be.lessThan(20 * 60);
             });
+          });
+        });
+      });
+    });
+  });
+  // @todo: the import needs to be fixed. we get "JavaScript heap out of memory"
+  describe.skip('using compiler', () => {
+    before(() => {
+      helper.scopeHelper.setNewLocalAndRemoteScopes();
+      const getImp = (index) => {
+        if (index === 0) return '';
+        if (index > maxFlattenedDependencies) {
+          return `require('./comp${index - maxFlattenedDependencies}');`;
+        }
+        return `require('./comp${index - 1}');`;
+      };
+      for (let i = 0; i < maxComponents; i += 1) {
+        helper.fs.createFile('bar', `comp${i}.js`, getImp(i));
+      }
+      helper.command.addComponent('bar/*');
+      helper.env.importDummyCompiler();
+    });
+    describe('tag command', () => {
+      let tagTimeInSeconds;
+      before(() => {
+        const start = process.hrtime();
+        helper.command.tagAllComponents();
+        [tagTimeInSeconds] = process.hrtime(start);
+        console.log('tagTimeInSeconds', tagTimeInSeconds);
+      });
+      it('should take less then 5 minutes to complete', () => {
+        expect(tagTimeInSeconds).to.be.lessThan(5 * 60);
+      });
+      describe('status command after tag', () => {
+        let statusTimeInSeconds;
+        before(() => {
+          const start = process.hrtime();
+          helper.command.status();
+          [statusTimeInSeconds] = process.hrtime(start);
+          console.log('statusTimeInSeconds', statusTimeInSeconds);
+        });
+        it('should take less then 3 minutes to complete', () => {
+          expect(statusTimeInSeconds).to.be.lessThan(3 * 60);
+        });
+      });
+      describe('export command', () => {
+        let exportTimeInSeconds;
+        before(() => {
+          const start = process.hrtime();
+          helper.command.exportAllComponents();
+          [exportTimeInSeconds] = process.hrtime(start);
+          console.log('exportTimeInSeconds', exportTimeInSeconds);
+        });
+        it('should take less then 5 minutes to complete', () => {
+          expect(exportTimeInSeconds).to.be.lessThan(5 * 60);
+        });
+        describe('import command', () => {
+          let importTimeInSeconds;
+          before(() => {
+            const start = process.hrtime();
+            helper.command.runCmd('bit import');
+            [importTimeInSeconds] = process.hrtime(start);
+            console.log('importTimeInSeconds', importTimeInSeconds);
+          });
+          it('should take less then 20 minutes to complete', () => {
+            expect(importTimeInSeconds).to.be.lessThan(20 * 60);
           });
         });
       });
