@@ -2,7 +2,6 @@
 import path from 'path';
 import fs from 'fs-extra';
 import R from 'ramda';
-import c from 'chalk';
 import { pathNormalizeToLinux } from '../../utils';
 import createSymlinkOrCopy from '../../utils/fs/create-symlink-or-copy';
 import ComponentConfig from '../config';
@@ -23,6 +22,7 @@ import MissingFilesFromComponent from './exceptions/missing-files-from-component
 import ComponentNotFoundInPath from './exceptions/component-not-found-in-path';
 import IsolatedEnvironment, { IsolateOptions } from '../../environment';
 import type { Log } from '../../scope/models/version';
+import type { ScopeListItem } from '../../scope/models/model-component';
 import type BitMap from '../bit-map';
 import ComponentMap from '../bit-map/component-map';
 import type { ComponentOrigin } from '../bit-map/component-map';
@@ -111,7 +111,8 @@ export type ComponentProps = {
   license?: ?License,
   deprecated: ?boolean,
   origin: ComponentOrigin,
-  log?: ?Log
+  log?: ?Log,
+  scopesList?: ScopeListItem[]
 };
 
 export default class Component {
@@ -166,6 +167,7 @@ export default class Component {
   _currentlyUsedVersion: BitId; // used by listScope functionality
   pendingVersion: Version; // used during tagging process. It's the version that going to be saved or saved already in the model
   dataToPersist: DataToPersist;
+  scopesList: ?(ScopeListItem[]);
 
   get id(): BitId {
     return new BitId({
@@ -226,7 +228,8 @@ export default class Component {
     log,
     deprecated,
     origin,
-    customResolvedPaths
+    customResolvedPaths,
+    scopesList
   }: ComponentProps) {
     this.name = name;
     this.version = version;
@@ -262,6 +265,7 @@ export default class Component {
     this.deprecated = deprecated || false;
     this.origin = origin;
     this.customResolvedPaths = customResolvedPaths || [];
+    this.scopesList = scopesList;
     this.validateComponent();
   }
 
@@ -861,7 +865,7 @@ export default class Component {
       // when loaded from filesystem, it doesn't have the flatten, fetch them from model.
       return this.loadedFromFileSystem ? this.componentFromModel[field] : this[field];
     };
-    const getDependenciesComponents = (ids: BitIds): Component[] => {
+    const getDependenciesComponents = (ids: BitIds): Promise<Component[]> => {
       return Promise.all(
         ids.map((dependencyId) => {
           if (consumer.bitMap.isExistWithSameVersion(dependencyId)) {
@@ -1074,9 +1078,9 @@ export default class Component {
       componentDir: bitDir,
       workspaceDir: consumerPath
     };
-    const isAuthor = componentMap.origin === COMPONENT_ORIGINS.AUTHORED;
+    const isNotNested = componentMap.origin !== COMPONENT_ORIGINS.NESTED;
     // overrides from consumer-config is not relevant and should not affect imported
-    const overridesFromConsumer = isAuthor ? workspaceConfig.overrides.getOverrideComponentData(id) : null;
+    const overridesFromConsumer = isNotNested ? workspaceConfig.overrides.getOverrideComponentData(id) : null;
     const propsToLoadEnvs = {
       consumerPath,
       envType: COMPILER_ENV_TYPE,
@@ -1116,12 +1120,14 @@ export default class Component {
     };
 
     const overridesFromModel = componentFromModel ? componentFromModel.overrides.componentOverridesData : null;
+    const isAuthor = componentMap.origin === COMPONENT_ORIGINS.AUTHORED;
     const overrides = ComponentOverrides.loadFromConsumer(
       overridesFromConsumer,
       overridesFromModel,
       componentConfig,
       isAuthor
     );
+
     const packageJsonFile = (componentConfig && componentConfig.packageJsonFile) || null;
     const packageJsonChangedProps = componentFromModel ? componentFromModel.packageJsonChangedProps : null;
 

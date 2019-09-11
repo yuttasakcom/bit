@@ -281,7 +281,10 @@ const _runBuild = async ({
         shouldBuildDependencies?: boolean
       }): Promise<{ capsule: Capsule, componentWithDependencies: ComponentWithDependencies }> => {
         const isolator = await Isolator.getInstance('fs', scope, consumer, targetDir);
-        const componentWithDependencies = await isolator.isolate(component.id, { shouldBuildDependencies });
+        const componentWithDependencies = await isolator.isolate(component.id, {
+          shouldBuildDependencies,
+          dist: false
+        });
         const writeDists = async (builtFiles, mainDist): Promise<void> => {
           const capsuleComponent: ConsumerComponent = componentWithDependencies.component;
           capsuleComponent.setDists(builtFiles.map(file => new Dist(file)), mainDist);
@@ -316,6 +319,12 @@ const _runBuild = async ({
           }
           return updatedFiles;
         };
+        const installPackages = async (packages: string[] = []) => {
+          await isolator.installPackagesOnRoot(packages);
+          // after installing packages on capsule root, some links/symlinks from node_modules might
+          // be deleted. rewrite the links to recreate them.
+          await isolator.writeLinksOnNodeModules();
+        };
         const capsuleFiles = componentWithDependencies.component.files;
         return {
           capsule: isolator.capsule,
@@ -323,6 +332,9 @@ const _runBuild = async ({
           componentWithDependencies,
           writeDists,
           getDependenciesLinks,
+          writeLinks: () => isolator.writeLinks(),
+          capsuleExec: (cmd, options) => isolator.capsuleExec(cmd, options),
+          installPackages,
           addSharedDir
         };
       };

@@ -7,6 +7,69 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [unreleased]
 
+## [[14.3.0] - 2019-09-11](https://github.com/teambit/bit/releases/tag/v14.3.0)
+
+### New
+- [#1956](https://github.com/teambit/bit/issues/1956) add `defaultScope` settings in workspace config for `bit export` to use when no remote scope defined for component
+- [#1990](https://github.com/teambit/bit/issues/1990) auto add `@types/package-name` for *.tsx files
+​
+### Changes
+- generate `node_modules` links upon build for new components
+​
+### Bug fixes
+- fail early when exporting nested dependency
+- fix an error "Cannot read property log of null" upon bit log
+- [#1988](https://github.com/teambit/bit/issues/1988) avoid adding a component to root package.json when importing with `--ignore-package-json` flag
+- [#1972](https://github.com/teambit/bit/issues/1972) fix generated links to nested dependencies in the capsule
+- [#1966](https://github.com/teambit/bit/issues/1966) prevent intermediate console printing when `--json` flag is used
+- [#1721](https://github.com/teambit/bit/issues/1721) enable removing/workspace-propagating a compiler/tester from component's config
+- [#1965](https://github.com/teambit/bit/issues/1965) fix generated links for `.scss` and `.sass` packages to point to the main file
+- [#1959](https://github.com/teambit/bit/issues/1959) improve message when running `bit build` when compiler not configured
+- fix dist replacements upon export (for angular compiler) to support require statements to an internal path
+- [#1947](https://github.com/teambit/bit/issues/1947) workaround an angular-compiler issue when the dists have a prefix
+​
+### Experimental
+- [#1956](https://github.com/teambit/bit/issues/1956) add `--include-dependencies`flag for `bit export` to be export all component-dependencies to the remote scope
+- [#1956](https://github.com/teambit/bit/issues/1956) support exporting components without mentioning a remote by exporting to their last remotes
+
+## [[14.2.4] - 2019-08-13](https://github.com/teambit/bit/releases/tag/v14.2.4)
+​
+### New
+
+- [#1867](https://github.com/teambit/bit/issues/1867) apply workspace overrides config on imported components
+- [#1863](https://github.com/teambit/bit/issues/1863) allow excluding components from `overrides` rules
+- [#1865](https://github.com/teambit/bit/issues/1865) allow adding `package.json` props via `overrides`
+- [#1837](https://github.com/teambit/bit/issues/1837) enable executing commands on remote components outside of bit-workspace
+- [#913](https://github.com/teambit/bit/issues/913) add new flags to bit init `-c|--compiler`, `-t|--tester`, `-d|--default-directory`, `-p|--package-manager`
+- [#1889](https://github.com/teambit/bit/issues/1889) auto add `@types/package-name` to the dependencies of TS components
+- added `no_warnings` config to eliminate some warnings from being written to the stdout
+​
+### Changes
+​
+- remove Angular dependencies from bit-javascript, instead, use TS compiler to parse Angular Decorators
+- [#1892](https://github.com/teambit/bit/issues/1892) deprecating `bit list --bare` and replace with `bit list --raw`
+- [#1774](https://github.com/teambit/bit/issues/1774) improve access errors and warn when sudo is used
+- change shortcut flag to `bit init` standalone from `t` to `T`
+​
+### Bug fixes
+​
+- safer access to bit global config
+- [#1903](https://github.com/teambit/bit/issues/1903) fix importing dependents to not override dependencies
+- fix capsule to respect the `override` property of vinyl files
+- [#1925](https://github.com/teambit/bit/issues/1925) update bit-javascript to fix Angular non-relative paths from decorators
+​
+### Experimental
+​
+- [#1885](https://github.com/teambit/bit/issues/1885) introduce new flags `--dependents` and `--dependencies` for `bit show` to display them all recursively
+- [#1908](https://github.com/teambit/bit/issues/1908) new bit init interactive
+Collapse
+
+## [[14.2.3] - 2019-07-28](https://github.com/teambit/bit/releases/tag/v14.2.3)
+
+- [#1714](https://github.com/teambit/bit/issues/1714) auto recognize mainFile when a file added with the same name as its dir
+- [#1683](https://github.com/teambit/bit/issues/1683) introduce `--namespace` flag for `bit list` to support namespaces with wildcards
+- [#1727](https://github.com/teambit/bit/issues/1727) prevent saving objects that link to invalid objects
+- [#1856](https://github.com/teambit/bit/issues/1856) fix links deletion from `node_modules` after installing packages by a compiler on a capsule
 - [#1710](https://github.com/teambit/bit/issues/1710) improve performance of importing an entire collection
 
 ## [14.2.2] - 2019-07-24
