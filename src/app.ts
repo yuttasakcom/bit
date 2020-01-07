@@ -1,6 +1,6 @@
 import * as Promise from 'bluebird';
 import loudRejection from 'loud-rejection';
-import buildRegistrar from './cli/command-registrar-builder';
+import buildRegistrar from './cli/new-command-registrar-builder';
 import loadExtensions from './extensions/extensions-loader';
 import HooksManager from './hooks';
 
