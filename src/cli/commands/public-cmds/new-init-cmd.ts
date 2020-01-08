@@ -75,7 +75,6 @@ const Init: Command = {
     },
     interactive: {
       alias: 'I',
-      default: 'false',
       describe: 'start an interactive process',
       type: 'boolean',
       conflicts: 'bare',

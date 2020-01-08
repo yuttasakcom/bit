@@ -19,8 +19,6 @@ export function jsonMiddleware(argv) {
 // export function migrationMiddleware(argv) {}
 
 export function loggerMiddleware(argv, yargs) {
-  console.log('run loggerMiddleware');
-  // console.log('run argv, yargs', argv, yargs);
   const name = argv._.join(' ');
   logger.info(`[*] started a new command: "${name}" with the following data:`, {
     args: argv
