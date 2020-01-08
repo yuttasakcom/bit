@@ -12,8 +12,8 @@ import { MigrationResult } from '../../../migration/migration-helper';
  * @returns {Promise<MigrationResult>} - wether the process run and wether it successeded
  */
 export default (async function migrate(
-  scopePath: string,
-  verbose: boolean
+  scopePath?: string,
+  verbose?: boolean
 ): Promise<MigrationResult | null | undefined> {
   logger.debug('migrate.migrate, starting migration process');
   if (verbose) console.log('starting migration process'); // eslint-disable-line no-console

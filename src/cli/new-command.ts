@@ -1,4 +1,5 @@
 import R from 'ramda';
+import format from 'string-format';
 import { PositionalOptions, Options, Arguments } from 'yargs';
 
 export type CommandOption = [string, string, string];
@@ -48,6 +49,7 @@ export type PositionalDeclaration = { [key: string]: PositionalOptions };
 export type OptionsDeclaration = { [key: string]: Options };
 
 export default interface Cmd {
+  name: string;
   command: string;
   description: string;
   positionals?: PositionalDeclaration;
@@ -56,7 +58,8 @@ export default interface Cmd {
   commands?: Cmd[];
   specialOptions?: CommandSpecialOptions;
 
-  handler: (args: Arguments<{}>) => Promise<void>;
+  handler: (args: Arguments<{}>) => Promise<any>;
+  render: (data: any, args: Arguments<{}>) => string;
 }
 
 export const cmdToYargsCmd = (command: Cmd) => {
@@ -71,10 +74,12 @@ export const cmdToYargsCmd = (command: Cmd) => {
     };
   }
   const yargsCmd = {
-    command: command.command,
+    command: format(command.command, { name: command.name }),
     describe: command.description,
     builder: builder,
-    handler: command.handler
+    handler: command.handler,
+    // A workaround to be able to wrap the handler later
+    _handler: command.handler
   };
   return yargsCmd;
 };

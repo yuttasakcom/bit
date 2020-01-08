@@ -11,32 +11,87 @@ import clean from '../../../utils/object-clean';
 import shouldShowInteractive from '../../../interactive/utils/should-show-interactive';
 
 const Init: Command = {
-  command: 'init [path]',
+  name: 'init',
+  command: '{name} [path]',
   description: `initialize an empty bit scope\n  https://${BASE_DOCS_DOMAIN}/docs/workspace`,
   positionals: { path: { description: 'path to initialize the workspace' } },
   aliases: 'i',
   opts: {
-    b: {
-      alias: 'bare',
-      default: false,
+    bare: {
+      alias: 'b',
       describe: 'initialize an empty bit bare scope',
       type: 'boolean'
     },
-    T: {
-      alias: 'standalone',
+    shared: {
+      alias: 's',
+      describe: 'add group write permissions to a scope properly',
+      type: 'string'
+    },
+    standalone: {
+      alias: 'T',
       default: false,
       describe: 'do not nest component store within .git directory and do not write config data inside package.json',
       type: 'boolean'
+    },
+    reset: {
+      alias: 'r',
+      default: false,
+      describe: 'write missing or damaged Bit files',
+      type: 'boolean'
+    },
+    'reset-hard': {
+      default: false,
+      describe:
+        'delete all Bit files and directories, including Bit configuration, tracking and model data. Useful for re-start using Bit from scratch',
+      type: 'boolean'
+    },
+    compiler: {
+      describe: 'set up compiler',
+      type: 'string',
+      conflicts: 'bare'
+    },
+    tester: {
+      describe: 'set up tester',
+      type: 'string',
+      conflicts: 'bare'
+    },
+    'default-directory': {
+      alias: 'd',
+      describe: 'set up default directory to import components into',
+      type: 'string',
+      conflicts: 'bare'
+    },
+    'package-manager': {
+      alias: 'p',
+      describe: 'set up package manager',
+      choices: ['npm', 'yarn'],
+      conflicts: 'bare'
+    },
+    force: {
+      alias: 'f',
+      default: 'false',
+      describe: 'force workspace initialization without clearing local objects',
+      type: 'boolean'
+    },
+    interactive: {
+      alias: 'I',
+      default: 'false',
+      describe: 'start an interactive process',
+      type: 'boolean',
+      conflicts: 'bare',
+      group: 'EXPERIMENTAL'
     }
   },
   specialOptions: {
     skipWorkspace: true
   },
   handler: args => {
-    console.log('im here');
-    console.log('args', args);
-    return Promise.resolve();
+    return Promise.resolve('init done');
+  },
+  render: (data, args) => {
+    return 'init render';
   }
+
   // opts = [
   //   ['b', 'bare [name]', 'initialize an empty bit bare scope'],
   //   ['s', 'shared <groupname>', 'add group write permissions to a scope properly'],

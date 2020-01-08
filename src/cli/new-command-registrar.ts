@@ -1,7 +1,7 @@
 import { serializeError } from 'serialize-error';
 import R from 'ramda';
 // @ts-ignore AUTO-ADDED-AFTER-MIGRATION-PLEASE-FIX!
-import yargs from 'yargs';
+import yargs, { MiddlewareFunction, Arguments } from 'yargs';
 import chalk from 'chalk';
 import didYouMean from 'didyoumean';
 import Command, { cmdToYargsCmd } from './new-command';
@@ -17,8 +17,10 @@ import globalFlags from './global-flags';
 
 didYouMean.returnFirstMatch = true;
 
-function logAndExit(msg: string, commandName, code = 0) {
+async function logAndExit(msg: string, commandName, code = 0) {
   process.stdout.write(`${msg}\n`, () => logger.exitAfterFlush(code, commandName));
+  // process.stdout.write(`${msg}\n`);
+  // return logger.exitAfterFlush(code, commandName);
 }
 
 function logErrAndExit(msg: Error | string, commandName: string) {
@@ -28,104 +30,55 @@ function logErrAndExit(msg: Error | string, commandName: string) {
   logger.exitAfterFlush(1, commandName);
 }
 
-function parseSubcommandFromArgs(args: [any]) {
-  if (typeof first(args) === 'string') return first(args);
-  return null;
-}
-
-function parseCommandName(commandName: string): string {
-  if (!commandName) return '';
-  return first(commandName.split(' '));
-}
-
-function getOpts(c, opts: [[string, string, string]]): { [key: string]: boolean | string } {
-  const options = {};
-
-  opts.forEach(([, name]) => {
-    const parsedName = parseCommandName(name);
-    const camelCaseName = camelCase(parsedName);
-
-    if (name.startsWith('no-')) {
-      // from commander help: "Note that multi-word options starting with --no prefix negate the boolean value of the following word. For example, --no-sauce sets the value of program.sauce to false."
-      // we don't want this feature, so we do the opposite action.
-      options[camelCaseName] = !c[camelCase(parsedName.replace('no-', ''))];
-    } else {
-      options[camelCaseName] = c[camelCaseName];
-    }
-  });
-
-  return options;
-}
-
-function execAction(command, concrete, args) {
-  const flags = getOpts(concrete, command.opts);
-  const relevantArgs = args.slice(0, args.length - 1);
-  const packageManagerArgs = concrete.parent.packageManagerArgs;
-  Analytics.init(concrete.name(), flags, relevantArgs, concrete.parent._version);
-  logger.info(`[*] started a new command: "${command.name}" with the following data:`, {
-    args: relevantArgs,
-    flags,
-    packageManagerArgs
-  });
-  if (command.loader) {
-    loader.on();
-  }
-  if (flags[TOKEN_FLAG_NAME]) {
-    globalFlags.token = flags[TOKEN_FLAG_NAME].toString();
-  }
-
-  // @ts-ignore AUTO-ADDED-AFTER-MIGRATION-PLEASE-FIX!
-  if (flags.json) {
-    loader.off();
-    logger.shouldWriteToConsole = false;
-  }
-  const migrateWrapper = (run: boolean) => {
-    if (run) {
-      logger.debug('Checking if a migration is needed');
-      // @ts-ignore AUTO-ADDED-AFTER-MIGRATION-PLEASE-FIX!
-      return migrate(null, false);
-    }
-    return Promise.resolve();
-  };
-
-  migrateWrapper(command.migration)
-    // @ts-ignore AUTO-ADDED-AFTER-MIGRATION-PLEASE-FIX!
-    .then(() => {
-      return command.action(relevantArgs, flags, packageManagerArgs).then(res => {
-        loader.off();
-        let data = res;
-        let code = 0;
-        if (res && res.__code !== undefined) {
-          data = res.data;
-          code = res.__code;
-        }
-        return logAndExit(command.report(data, relevantArgs, flags), command.name, code);
-      });
-    })
-    .catch(err => {
-      logger.error(
-        `got an error from command ${command.name}: ${err}. Error serialized: ${JSON.stringify(
-          err,
-          Object.getOwnPropertyNames(err)
-        )}`
-      );
-      loader.off();
-      const errorHandled = defaultHandleError(err) || command.handleError(err);
-
-      if (command.private) return serializeErrAndExit(err, command.name);
-      if (!command.private && errorHandled) return logErrAndExit(errorHandled, command.name);
-      return logErrAndExit(err, command.name);
-    });
-}
-
 function serializeErrAndExit(err, commandName) {
   process.stderr.write(packCommand(buildCommandMessage(serializeError(err), undefined, false), false, false));
   const code = err.code && isNumeric(err.code) ? err.code : 1;
   return logger.exitAfterFlush(code, commandName);
 }
 
+/**
+ * Wrap the handler of the command to support specialOptions such as loader, migration and token
+ *
+ * @param {(args: Arguments<{}>) => Promise<any>} handler
+ * @returns {(args: Arguments<{}>) => Promise<any>}
+ */
+function wrapHandler(command: Command): (args: Arguments<{}>) => Promise<any> {
+  if (R.path(['specialOptions', 'loader'], command)) {
+    loader.on();
+  }
+  const origHandler = command.handler;
+  const handler = async (args: Arguments<{}>) => {
+    const token = args[TOKEN_FLAG_NAME];
+    if (typeof token === 'string') {
+      globalFlags.token = token;
+    }
+    if (args.json) {
+      loader.off();
+      logger.shouldWriteToConsole = false;
+    }
+    const runMigration = R.path(['specialOptions', 'migration'], command);
+    const migrationP = runMigration ? migrate() : Promise.resolve();
+    await migrationP;
+    return origHandler(args);
+  };
+  return handler;
+}
+
 function register(command: Command, yargsIns) {
-  const yargsCmd = yargsIns.command(cmdToYargsCmd(command));
+  command.handler = wrapHandler(command);
+  const yargsCmd = yargsIns.command(cmdToYargsCmd(command)).onFinishCommand(async resultValue => {
+    console.log('finished with ', resultValue);
+    loader.off();
+    let data = resultValue;
+    let code = 0;
+    if (resultValue && resultValue.__code !== undefined) {
+      data = resultValue.data;
+      code = resultValue.__code;
+    }
+    await logAndExit(command.render(data, yargsIns.argv), command.command, code);
+    console.log('register after');
+    // process.exit()
+  });
 
   // TODO: add this
   // if (command.remoteOp) {
@@ -144,9 +97,17 @@ export default class CommandRegistrar {
     public usage: string,
     public description: string,
     public epilogue: string,
+    public middlewares: MiddlewareFunction[],
     public commands: Command[],
     public extensionsCommands: Command[]
   ) {}
+  config() {
+    yargs
+      .parserConfiguration({ 'boolean-negation': false })
+      .recommendCommands()
+      .wrap(yargs.terminalWidth());
+  }
+
   registerBaseCommand() {
     yargs
       .version()
@@ -154,12 +115,36 @@ export default class CommandRegistrar {
       .epilogue(this.epilogue);
   }
 
+  registerMiddlewares() {
+    yargs.middleware(this.middlewares);
+  }
+
   registerCommands() {
     this.commands.forEach(cmd => register(cmd, yargs));
   }
 
+  registerFail() {
+    yargs.fail((msg, err, yargs) => {
+      console.log('on fail');
+      console.log('msg', msg);
+      console.log('err', err);
+      // logger.error(
+      //   `got an error from command ${command.name}: ${err}. Error serialized: ${JSON.stringify(
+      //     err,
+      //     Object.getOwnPropertyNames(err)
+      //   )}`
+      // );
+      // loader.off();
+      // const errorHandled = defaultHandleError(err) || command.handleError(err);
+
+      // if (command.private) return serializeErrAndExit(err, command.name);
+      // if (!command.private && errorHandled) return logErrAndExit(errorHandled, command.name);
+      // return logErrAndExit(err, command.name);
+    });
+  }
+
   registerExtenstionsCommands() {
-    this.extensionsCommands.forEach(cmd => register(cmd, commander));
+    this.extensionsCommands.forEach(cmd => register(cmd, yargs));
   }
 
   printHelp() {
@@ -169,54 +154,20 @@ export default class CommandRegistrar {
     return this;
   }
 
-  outputHelp() {
-    const args = process.argv.slice(2);
-    if (!args.length) {
-      // @TODO replace back to commander help and override help method
-      // commander.help();
-      this.printHelp();
-      return this;
-    }
-
-    const subcommand = args[0];
-    const cmdList = this.commands.map(cmd => first(cmd.name.split(' ')));
-    // @ts-ignore AUTO-ADDED-AFTER-MIGRATION-PLEASE-FIX!
-    const extensionsCmdList = this.extensionsCommands.map(cmd => first(cmd.name.split(' ')));
-    const aliasList = this.commands.map(cmd => first(cmd.alias.split(' ')));
-
-    if (
-      !cmdList.includes(subcommand) &&
-      !extensionsCmdList.includes(subcommand) &&
-      !aliasList.includes(subcommand) &&
-      subcommand !== '-V' &&
-      subcommand !== '--version'
-    ) {
-      process.stdout.write(
-        chalk.yellow(
-          `warning: '${chalk.bold(subcommand)}' is not a valid command.\nsee 'bit --help' for additional information.\n`
-        )
-      );
-      const suggestion = didYouMean(subcommand, commander.commands.filter(c => !c._noHelp).map(cmd => cmd._name));
-      if (suggestion) {
-        const match = typeof suggestion === 'string' ? suggestion : suggestion[0];
-        console.log(chalk.red(`Did you mean ${chalk.bold(match)}?`)); // eslint-disable-line no-console
-      }
-      return this;
-    }
-
-    return this;
-  }
-
   run() {
     const [params, packageManagerArgs] = R.splitWhen(R.equals('--'), process.argv);
     packageManagerArgs.shift(); // the first item, '--', is not needed.
+    this.config();
     this.registerBaseCommand();
+    this.registerMiddlewares();
     this.registerCommands();
+    this.registerFail();
     // this.registerExtenstionsCommands();
     // this.outputHelp();
     // commander.packageManagerArgs = packageManagerArgs; // it's a hack, I didn't find a better way to pass them
     // commander.parse(params);
-    yargs.parse();
+    // yargs.parse();
+    yargs.argv;
     return this;
   }
 }
