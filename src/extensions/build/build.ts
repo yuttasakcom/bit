@@ -66,20 +66,22 @@ export class Build {
       console.log(`building component ${component.component.id.toString()}...`);
 
       // eslint-disable-next-line consistent-return
-      pipe.forEach(async (elm: string) => {
-        if (this.tasks[elm]) return this.runTask(elm, new TaskContext(component));
-        // should execute registered extension tasks as well
-        const exec = await capsule.exec({ command: elm.split(' ') });
-        // eslint-disable-next-line no-console
-        exec.stdout.on('data', chunk => console.log(chunk.toString()));
+      await Promise.all(
+        pipe.map(async (elm: string) => {
+          if (this.tasks[elm]) return this.runTask(elm, new TaskContext(component));
+          // should execute registered extension tasks as well
+          const exec = await capsule.exec({ command: elm.split(' ') });
+          // eslint-disable-next-line no-console
+          exec.stdout.on('data', chunk => console.log(chunk.toString()));
 
-        const promise = new Promise(resolve => {
-          exec.stdout.on('close', () => resolve());
-        });
+          const promise = new Promise(resolve => {
+            exec.stdout.on('close', () => resolve());
+          });
 
-        // save dists? add new dependencies? change component main file? add further configs?
-        await promise;
-      });
+          // save dists? add new dependencies? change component main file? add further configs?
+          await promise;
+        })
+      );
     });
 
     return Promise.all(promises).then(() => resolvedComponents);
