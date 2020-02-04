@@ -40,5 +40,5 @@ export async function reactTask(context: TaskContext) {
   // save dists? add new dependencies? change component main file? add further configs?
   const packageJson = JSON.parse(capsule.fs.readFileSync(`${capsule.wrkDir}/package.json`).toString());
   packageJson.main = './dist';
-  capsule.fs.writeFileSync(`${capsule.wrkDir}/package.json`, JSON.stringify(packageJson));
+  capsule.fs.writeFileSync(`${capsule.wrkDir}/package.json`, JSON.stringify(packageJson, null, 2));
 }
