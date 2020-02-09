@@ -23,10 +23,8 @@ export default class ComposeCmd implements Command {
   async render([id]: CLIArgs) {
     // eslint-disable-next-line no-async-promise-executor
     return new Promise(async () => {
-      // @ts-ignore
-      const components = id ? await this.workspace.get(id) : await this.workspace.list();
-      // const components = await this.workspace.get('base/card');
-      const resolved = await this.pipes.run('build', components);
+      const components = await this.workspace.list();
+      const resolved = await this.pipes.run('build', components.map(comp => comp.id.toString()));
 
       const data = resolved.reduce((map, component) => {
         map[component.component.id.toString()] = component.capsule.wrkDir;
