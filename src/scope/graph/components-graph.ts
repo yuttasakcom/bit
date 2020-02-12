@@ -1,4 +1,4 @@
-import graphLib, { Graph } from 'graphlib';
+import { Graph } from 'cleargraph';
 import R from 'ramda';
 import Component from '../../consumer/component/consumer-component';
 import Dependencies, { DEPENDENCIES_TYPES } from '../../consumer/component/dependencies/dependencies';
@@ -11,8 +11,8 @@ import { Consumer } from '../../consumer';
 import { Dependency } from '../../consumer/component/dependencies';
 
 export type AllDependenciesGraphs = {
-  graphDeps: Graph;
-  graphDevDeps: Graph;
+  graphDeps: Graph<Component, Dependency>;
+  graphDevDeps: Graph<Component>;
   graphCompilerDeps: Graph;
   graphTesterDeps: Graph;
 };

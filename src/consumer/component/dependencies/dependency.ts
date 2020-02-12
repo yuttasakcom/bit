@@ -4,6 +4,7 @@ import { PathLinux } from '../../../utils/path';
 import { ImportSpecifier } from './dependency-resolver/types/dependency-tree-type';
 import { pathJoinLinux } from '../../../utils/path';
 import { ManipulateDirItem } from '../../component-ops/manipulate-dir';
+import { Serializable } from 'cleargraph';
 
 /**
  * a dependency component may have multiple files that are required from the parent component, each
@@ -23,12 +24,20 @@ export type RelativePath = {
   importSource?: string; // available when isCustomResolveUsed=true, contains the import path. e.g. "import x from 'src/utils'", importSource is 'src/utils'.
 };
 
-export default class Dependency {
+export default class Dependency implements Serializable {
   id: BitId;
   relativePaths: RelativePath[];
   constructor(id: BitId, relativePaths: RelativePath[]) {
     this.id = id;
     this.relativePaths = relativePaths;
+  }
+
+  toString(): string {
+    let obj = {
+      id: this.id.toString(),
+      relativePaths: JSON.stringify(this.relativePaths)
+    };
+    return JSON.stringify(obj);
   }
 
   static stripOriginallySharedDir(

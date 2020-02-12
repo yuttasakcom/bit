@@ -72,6 +72,7 @@ import { stripSharedDirFromPath } from '../component-ops/manipulate-dir';
 import ComponentsPendingImport from '../component-ops/exceptions/components-pending-import';
 import ExtensionIsolateResult from '../../legacy-extensions/extension-isolate-result';
 import { ComponentCapsule } from '../../extensions/capsule-ext';
+import { Serializable } from 'cleargraph';
 
 export type customResolvedPath = { destinationPath: PathLinux; importSource: string };
 
@@ -120,7 +121,7 @@ export type ComponentProps = {
   componentFromModel?: Component | null | undefined;
 };
 
-export default class Component {
+export default class Component implements Serializable {
   name: string;
   version: string | null | undefined;
   scope: string | null | undefined;
@@ -925,6 +926,50 @@ export default class Component {
 
   toString(): string {
     return JSON.stringify(this.toObject());
+  }
+
+  fromString(str: string): Component {
+    let obj = JSON.parse(str);
+    return new Component({
+      name: obj.name,
+      version: obj.version,
+      scope: obj.scope,
+      files: obj.files,
+      lang: obj.lang,
+      bindingPrefix: obj.bindingPrefix,
+      mainFile: obj.mainFile,
+      compiler: obj.compiler,
+      tester: obj.tester,
+      bitJson: obj.bitJson,
+      dependencies: obj.dependencies,
+      devDependencies: obj.devDependencies,
+      compilerDependencies: obj.compilerDependencies,
+      testerDependencies: obj.testerDependencies,
+      flattenedDependencies: obj.flattenedDependencies,
+      flattenedDevDependencies: obj.flattenedDevDependencies,
+      flattenedCompilerDependencies: obj.flattenedCompilerDependencies,
+      flattenedTesterDependencies: obj.flattenedTesterDependencies,
+      packageDependencies: obj.packageDependencies,
+      devPackageDependencies: obj.devPackageDependencies,
+      peerPackageDependencies: obj.peerPackageDependencies,
+      compilerPackageDependencies: obj.compilerPackageDependencies,
+      testerPackageDependencies: obj.testerPackageDependencies,
+      componentFromModel: obj.componentFromModel,
+      overrides: obj.overrides,
+      packageJsonFile: obj.packageJsonFile,
+      packageJsonChangedProps: obj.packageJsonChangedProps,
+      docs: obj.docs,
+      dists: obj.dists,
+      mainDistFile: obj.mainDistFile,
+      specsResults: obj.specsResults,
+      license: obj.license,
+      log: obj.log,
+      deprecated: obj.deprecated,
+      origin: obj.origin,
+      customResolvedPaths: obj.customResolvedPaths,
+      scopesList: obj.scopesList,
+      extensions: obj.extensions
+    });
   }
 
   copyFilesIntoDists() {
